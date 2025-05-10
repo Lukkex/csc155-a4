@@ -28,7 +28,9 @@ import static com.jogamp.opengl.GL.GL_POLYGON_OFFSET_FILL;
 import static com.jogamp.opengl.GL.GL_REPEAT;
 import static com.jogamp.opengl.GL.GL_STATIC_DRAW;
 import static com.jogamp.opengl.GL.GL_TEXTURE0;
+import static com.jogamp.opengl.GL.GL_TEXTURE1;
 import static com.jogamp.opengl.GL.GL_TEXTURE_2D;
+import static com.jogamp.opengl.GL.GL_TEXTURE_CUBE_MAP;
 import static com.jogamp.opengl.GL.GL_TEXTURE_MAG_FILTER;
 import static com.jogamp.opengl.GL.GL_TEXTURE_MIN_FILTER;
 import static com.jogamp.opengl.GL.GL_TEXTURE_WRAP_S;
@@ -39,6 +41,7 @@ import static com.jogamp.opengl.GL2ES2.GL_COMPARE_REF_TO_TEXTURE;
 import static com.jogamp.opengl.GL2ES2.GL_DEPTH_COMPONENT;
 import static com.jogamp.opengl.GL2ES2.GL_TEXTURE_COMPARE_FUNC;
 import static com.jogamp.opengl.GL2ES2.GL_TEXTURE_COMPARE_MODE;
+import static com.jogamp.opengl.GL2GL3.GL_TEXTURE_CUBE_MAP_SEAMLESS;
 import static com.jogamp.opengl.GL4.*;
 import com.jogamp.opengl.*;
 import com.jogamp.opengl.awt.GLCanvas;
@@ -51,8 +54,8 @@ import org.joml.*;
 
 public class Code extends JFrame implements GLEventListener, KeyListener
 {	private GLCanvas myCanvas;
-	private int renderingProgram1, renderingProgram2;
-	private final int numOfModels = 9;
+	private int renderingProgram1, renderingProgram2, renderingProgramCubeMap;
+	private final int numOfModels = 10;
 	private final int numOfObjects = numOfModels + 5;
 	private int numOfBuffersPerObject = 3;
 	private ImportedModel models[] = new ImportedModel[numOfModels];
@@ -206,14 +209,7 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 			invTrsMatrices[i] = new Matrix4f().identity();
 		}
 
-		models[0] = new ImportedModel("models/pyr.obj");
-		//Objects with external models
-		//models[0] = new ImportedModel("models/GHOUL.obj");
-		//textures[0] = Utils.loadTexture("textures/GHOUL.jpg");
-		
-		modelMatrices[0].translate(pyrLoc.x(), pyrLoc.y(), pyrLoc.z());
-		modelMatrices[0].rotateX((float)Math.toRadians(30.0f));
-		modelMatrices[0].rotateY((float)Math.toRadians(40.0f));
+		models[0] = new ImportedModel("models/GHOUL.obj");
 
 		models[1] = new ImportedModel("models/Sanctum.obj");
 		textures[1] = Utils.loadTexture("textures/Sanctum.jpg");
@@ -243,10 +239,15 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 		textures[8] = Utils.loadTexture("textures/brick1.jpg"); //From the book
 		modelMatrices[8].translate(new Vector3f(0f, -0.25f, 0f)); // Starts off lower in the world
 
+		models[9] = new ImportedModel("models/pyr.obj");
+		modelMatrices[9].translate(pyrLoc.x(), pyrLoc.y(), pyrLoc.z());
+		modelMatrices[9].rotateX((float)Math.toRadians(30.0f));
+		modelMatrices[9].rotateY((float)Math.toRadians(40.0f));
+
 		//Objects without any external models
 		textures[numOfModels] = Utils.loadTexture("textures/eyefloor.png"); //Custom
 		modelMatrices[numOfModels].translate(new Vector3f(0f, -3f, 0f)); // Starts off lower in the world
-		
+
 		textures[numOfModels+1] = Utils.loadTexture("textures/X.png");
 
 		textures[numOfModels+2] = Utils.loadTexture("textures/Y.png");
@@ -257,6 +258,7 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 
 		renderingProgram1 = Utils.createShaderProgram("a4/vert1shader.glsl", "a4/frag1shader.glsl");
 		renderingProgram2 = Utils.createShaderProgram("a4/vert2shader.glsl", "a4/frag2shader.glsl");
+		renderingProgramCubeMap = Utils.createShaderProgram("a4/vertCShader.glsl", "a4/fragCShader.glsl");
 
 		aspect = (float) myCanvas.getWidth() / (float) myCanvas.getHeight();
 		pMat.identity().setPerspective((float) Math.toRadians(60.0f), aspect, 0.1f, 1000.0f);
@@ -273,14 +275,58 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 			0.0f, 0.5f, 0.0f, 0.0f,
 			0.0f, 0.0f, 0.5f, 0.0f,
 			0.5f, 0.5f, 0.5f, 1.0f);
+
+		skyboxTexture = Utils.loadCubeMap("cubeMap");
+		skyboxModelMat.identity();
+
+		gl.glEnable(GL_TEXTURE_CUBE_MAP_SEAMLESS);
 	}
 
 	public void display(GLAutoDrawable drawable)
 	{	GL4 gl = (GL4) GLContext.getCurrentGL();
+
 		gl.glClear(GL_COLOR_BUFFER_BIT);
 		gl.glClear(GL_DEPTH_BUFFER_BIT);
+
+		//Get view matrix for the current frame
+		vMat.set(cam.buildViewMatrix());
+		
+		// draw cube map
+		gl.glUseProgram(renderingProgramCubeMap);
+
+		skyboxModelMat.rotateY((float)Math.toRadians(rotationSpeed * 5 * deltaTime));
+
+		mLoc = gl.glGetUniformLocation(renderingProgram1, "m_matrix");
+		gl.glUniformMatrix4fv(mLoc, 1, false, skyboxModelMat.get(vals));
+
+		vLoc = gl.glGetUniformLocation(renderingProgramCubeMap, "v_matrix");
+		gl.glUniformMatrix4fv(vLoc, 1, false, vMat.get(vals));
+
+		pLoc = gl.glGetUniformLocation(renderingProgramCubeMap, "p_matrix");
+		gl.glUniformMatrix4fv(pLoc, 1, false, pMat.get(vals));
+				
+		gl.glBindBuffer(GL_ARRAY_BUFFER, skyboxVBO[0]);
+		gl.glVertexAttribPointer(0, 3, GL_FLOAT, false, 0, 0);
+		gl.glEnableVertexAttribArray(0);
+		
+		gl.glActiveTexture(GL_TEXTURE0);
+		gl.glBindTexture(GL_TEXTURE_CUBE_MAP, skyboxTexture);
+
+		gl.glEnable(GL_CULL_FACE);
+		gl.glFrontFace(GL_CCW);	     // cube is CW, but we are viewing the inside
+		gl.glDisable(GL_DEPTH_TEST);
+		gl.glDrawArrays(GL_TRIANGLES, 0, 36);
+		gl.glEnable(GL_DEPTH_TEST);
+
+		//Clears color & depth buffers to default and uses prev. created renderingProgram object
+		gl.glDisable(GL_CULL_FACE);
+		gl.glUseProgram(renderingProgram1);
+
+		//Calculates delta time, used in movement functions to standardize speed across devices
+		calculateDeltaTime();
 		
 		currentLightPos.set(lightLoc);
+		currentLightPos.rotateAxis((float)Math.toRadians(amt * deltaTime), 0.0f, 0.0f, 1.0f);
 
 		updateObjects(gl);
 		
@@ -313,33 +359,31 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 	
 		gl.glUseProgram(renderingProgram1);
 
-		// draw the torus
-		
 		sLoc = gl.glGetUniformLocation(renderingProgram1, "shadowMVP");
 
 		gl.glClear(GL_DEPTH_BUFFER_BIT);
 
-		// draw the pyramid
-	
-		mMat = modelMatrices[0];
+		for (int i = 0; i < numOfModels; i++){
+			mMat = modelMatrices[i];
 
-		shadowMVP1.identity();
-		shadowMVP1.mul(lightPmat);
-		shadowMVP1.mul(lightVmat);
-		shadowMVP1.mul(mMat);
+			shadowMVP1.identity();
+			shadowMVP1.mul(lightPmat);
+			shadowMVP1.mul(lightVmat);
+			shadowMVP1.mul(mMat);
 
-		gl.glUniformMatrix4fv(sLoc, 1, false, shadowMVP1.get(vals));
+			gl.glUniformMatrix4fv(sLoc, 1, false, shadowMVP1.get(vals));
+			
+			gl.glBindBuffer(GL_ARRAY_BUFFER, vbo[i*numOfBuffersPerObject]);
+			gl.glVertexAttribPointer(0, 3, GL_FLOAT, false, 0, 0);
+			gl.glEnableVertexAttribArray(0);
+
+			gl.glEnable(GL_CULL_FACE);
+			gl.glFrontFace(GL_CCW);
+			gl.glEnable(GL_DEPTH_TEST);
+			gl.glDepthFunc(GL_LEQUAL);
 		
-		gl.glBindBuffer(GL_ARRAY_BUFFER, vbo[0]);
-		gl.glVertexAttribPointer(0, 3, GL_FLOAT, false, 0, 0);
-		gl.glEnableVertexAttribArray(0);
-
-		gl.glEnable(GL_CULL_FACE);
-		gl.glFrontFace(GL_CCW);
-		gl.glEnable(GL_DEPTH_TEST);
-		gl.glDepthFunc(GL_LEQUAL);
-	
-		gl.glDrawArrays(GL_TRIANGLES, 0, models[0].getNumVertices());
+			gl.glDrawArrays(GL_TRIANGLES, 0, models[i].getNumVertices());
+		}
 	}
 //+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 	public void passTwo()
@@ -356,47 +400,56 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 		vMat.set(cam.buildViewMatrix());
 		gl.glClear(GL_DEPTH_BUFFER_BIT);
 
-		// draw the pyramid
-		
-		thisAmb = GmatAmb; // the pyramid is gold
-		thisDif = GmatDif;
-		thisSpe = GmatSpe;
-		thisShi = GmatShi;
-		
-		mMat = modelMatrices[0];
-		
-		currentLightPos.set(lightLoc);
-		installLights(renderingProgram2);
+		for (int i = 0; i < numOfModels; i++){
+			thisAmb = GmatAmb; // the pyramid is gold
+			thisDif = GmatDif;
+			thisSpe = GmatSpe;
+			thisShi = GmatShi;
+			
+			mMat = modelMatrices[i];
+			
+			currentLightPos.set(lightLoc);
+			installLights(renderingProgram2);
 
-		shadowMVP2.identity();
-		shadowMVP2.mul(b);
-		shadowMVP2.mul(lightPmat);
-		shadowMVP2.mul(lightVmat);
-		shadowMVP2.mul(mMat);
-		
-		mMat.invert(invTrMat);
-		invTrMat.transpose(invTrMat);
+			shadowMVP2.identity();
+			shadowMVP2.mul(b);
+			shadowMVP2.mul(lightPmat);
+			shadowMVP2.mul(lightVmat);
+			shadowMVP2.mul(mMat);
+			
+			mMat.invert(invTrMat);
+			invTrMat.transpose(invTrMat);
 
-		gl.glUniformMatrix4fv(mLoc, 1, false, mMat.get(vals));
-		gl.glUniformMatrix4fv(vLoc, 1, false, vMat.get(vals));
-		gl.glUniformMatrix4fv(pLoc, 1, false, pMat.get(vals));
-		gl.glUniformMatrix4fv(nLoc, 1, false, invTrMat.get(vals));
-		gl.glUniformMatrix4fv(sLoc, 1, false, shadowMVP2.get(vals));
-		
-		gl.glBindBuffer(GL_ARRAY_BUFFER, vbo[0]);
-		gl.glVertexAttribPointer(0, 3, GL_FLOAT, false, 0, 0);
-		gl.glEnableVertexAttribArray(0);
+			gl.glUniformMatrix4fv(mLoc, 1, false, mMat.get(vals));
+			gl.glUniformMatrix4fv(vLoc, 1, false, vMat.get(vals));
+			gl.glUniformMatrix4fv(pLoc, 1, false, pMat.get(vals));
+			gl.glUniformMatrix4fv(nLoc, 1, false, invTrMat.get(vals));
+			gl.glUniformMatrix4fv(sLoc, 1, false, shadowMVP2.get(vals));
+			
+			gl.glBindBuffer(GL_ARRAY_BUFFER, vbo[i*numOfBuffersPerObject]);
+			gl.glVertexAttribPointer(0, 3, GL_FLOAT, false, 0, 0);
+			gl.glEnableVertexAttribArray(0);
 
-		gl.glBindBuffer(GL_ARRAY_BUFFER, vbo[2]);
-		gl.glVertexAttribPointer(1, 3, GL_FLOAT, false, 0, 0);
-		gl.glEnableVertexAttribArray(1);
+			/* 
+			gl.glBindBuffer(GL_ARRAY_BUFFER, vbo[(i*numOfBuffersPerObject)+2]);
+			gl.glVertexAttribPointer(1, 2, GL_FLOAT, false, 0, 0);
+			gl.glEnableVertexAttribArray(1);
+			*/
 
-		gl.glEnable(GL_CULL_FACE);
-		gl.glFrontFace(GL_CCW);
-		gl.glEnable(GL_DEPTH_TEST);
-		gl.glDepthFunc(GL_LEQUAL);
+			gl.glActiveTexture(GL_TEXTURE1);
+			gl.glBindTexture(GL_TEXTURE_2D, textures[i]);
 
-		gl.glDrawArrays(GL_TRIANGLES, 0, models[0].getNumVertices());
+			gl.glBindBuffer(GL_ARRAY_BUFFER, vbo[(i*numOfBuffersPerObject)+2]);
+			gl.glVertexAttribPointer(1, 3, GL_FLOAT, false, 0, 0);
+			gl.glEnableVertexAttribArray(1);
+
+			gl.glEnable(GL_CULL_FACE);
+			gl.glFrontFace(GL_CCW);
+			gl.glEnable(GL_DEPTH_TEST);
+			gl.glDepthFunc(GL_LEQUAL);
+
+			gl.glDrawArrays(GL_TRIANGLES, 0, models[i].getNumVertices());
+		}
 	}
 
 	
@@ -454,52 +507,6 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 			invTrsMatrices[i] = invTrMat;
 
 		}
-	}
-
-	private void installLights()
-	{	GL4 gl = (GL4) GLContext.getCurrentGL();
-		
-		lightPos[0]=currentLightPos.x(); lightPos[1]=currentLightPos.y(); lightPos[2]=currentLightPos.z();
-		
-		// set current material values
-		matAmb = thisAmb;
-		matDif = thisDif;
-		matSpe = thisSpe;
-		matShi = thisShi;
-
-		// get the locations of the light and material fields in the shader
-		globalAmbLoc = gl.glGetUniformLocation(renderingProgram1, "globalAmbient");
-		ambLoc = gl.glGetUniformLocation(renderingProgram1, "light.ambient");
-		diffLoc = gl.glGetUniformLocation(renderingProgram1, "light.diffuse");
-		specLoc = gl.glGetUniformLocation(renderingProgram1, "light.specular");
-		posLoc = gl.glGetUniformLocation(renderingProgram1, "light.position");
-		mambLoc = gl.glGetUniformLocation(renderingProgram1, "material.ambient");
-		mdiffLoc = gl.glGetUniformLocation(renderingProgram1, "material.diffuse");
-		mspecLoc = gl.glGetUniformLocation(renderingProgram1, "material.specular");
-		mshiLoc = gl.glGetUniformLocation(renderingProgram1, "material.shininess");
-	
-		//  set the uniform light and material values in the shader
-		gl.glProgramUniform4fv(renderingProgram1, globalAmbLoc, 1, globalAmbient, 0);
-		gl.glProgramUniform4fv(renderingProgram1, ambLoc, 1, lightAmbient, 0);
-		gl.glProgramUniform4fv(renderingProgram1, diffLoc, 1, lightDiffuse, 0);
-		gl.glProgramUniform4fv(renderingProgram1, specLoc, 1, lightSpecular, 0);
-		gl.glProgramUniform3fv(renderingProgram1, posLoc, 1, lightPos, 0);
-
-		switch (material){
-			case 0: 
-				gl.glProgramUniform4fv(renderingProgram1, mambLoc, 1, goldMatAmb, 0);
-				gl.glProgramUniform4fv(renderingProgram1, mdiffLoc, 1, goldMatDif, 0);
-				gl.glProgramUniform4fv(renderingProgram1, mspecLoc, 1, goldMatSpe, 0);
-				gl.glProgramUniform1f(renderingProgram1, mshiLoc, goldMatShi);
-				break;
-			case 1: 
-				gl.glProgramUniform4fv(renderingProgram1, mambLoc, 1, bronzeMatAmb, 0);
-				gl.glProgramUniform4fv(renderingProgram1, mdiffLoc, 1, bronzeMatDif, 0);
-				gl.glProgramUniform4fv(renderingProgram1, mspecLoc, 1, bronzeMatSpe, 0);
-				gl.glProgramUniform1f(renderingProgram1, mshiLoc, bronzeMatShi);
-				break;
-		}
-
 	}
 	
 	private void setupShadowBuffers()
@@ -573,6 +580,27 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 			norBuf = Buffers.newDirectFloatBuffer(nvalues);
 			gl.glBufferData(GL_ARRAY_BUFFER, norBuf.limit()*4,norBuf, GL_STATIC_DRAW);
 		}
+
+		//Skybox
+		// cube
+		float[] cubeVertexPositions =
+		{	-1.0f,  1.0f, -1.0f, -1.0f, -1.0f, -1.0f, 1.0f, -1.0f, -1.0f,
+			1.0f, -1.0f, -1.0f, 1.0f,  1.0f, -1.0f, -1.0f,  1.0f, -1.0f,
+			1.0f, -1.0f, -1.0f, 1.0f, -1.0f,  1.0f, 1.0f,  1.0f, -1.0f,
+			1.0f, -1.0f,  1.0f, 1.0f,  1.0f,  1.0f, 1.0f,  1.0f, -1.0f,
+			1.0f, -1.0f,  1.0f, -1.0f, -1.0f,  1.0f, 1.0f,  1.0f,  1.0f,
+			-1.0f, -1.0f,  1.0f, -1.0f,  1.0f,  1.0f, 1.0f,  1.0f,  1.0f,
+			-1.0f, -1.0f,  1.0f, -1.0f, -1.0f, -1.0f, -1.0f,  1.0f,  1.0f,
+			-1.0f, -1.0f, -1.0f, -1.0f,  1.0f, -1.0f, -1.0f,  1.0f,  1.0f,
+			-1.0f, -1.0f,  1.0f,  1.0f, -1.0f,  1.0f,  1.0f, -1.0f, -1.0f,
+			1.0f, -1.0f, -1.0f, -1.0f, -1.0f, -1.0f, -1.0f, -1.0f,  1.0f,
+			-1.0f,  1.0f, -1.0f, 1.0f,  1.0f, -1.0f, 1.0f,  1.0f,  1.0f,
+			1.0f,  1.0f,  1.0f, -1.0f,  1.0f,  1.0f, -1.0f,  1.0f, -1.0f
+		};
+
+		gl.glBindBuffer(GL_ARRAY_BUFFER, skyboxVBO[0]);
+		FloatBuffer cvertBuf = Buffers.newDirectFloatBuffer(cubeVertexPositions);
+		gl.glBufferData(GL_ARRAY_BUFFER, cvertBuf.limit()*4, cvertBuf, GL_STATIC_DRAW);
 	}
 	
 	private void installLights(int renderingProgram)
