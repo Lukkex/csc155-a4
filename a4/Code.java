@@ -21,6 +21,7 @@ import static com.jogamp.opengl.GL.GL_ELEMENT_ARRAY_BUFFER;
 import static com.jogamp.opengl.GL.GL_FLOAT;
 import static com.jogamp.opengl.GL.GL_FRAMEBUFFER;
 import static com.jogamp.opengl.GL.GL_FRONT;
+import static com.jogamp.opengl.GL.GL_FRONT_AND_BACK;
 import static com.jogamp.opengl.GL.GL_FUNC_ADD;
 import static com.jogamp.opengl.GL.GL_LEQUAL;
 import static com.jogamp.opengl.GL.GL_LINEAR;
@@ -46,7 +47,10 @@ import static com.jogamp.opengl.GL2ES2.GL_COMPARE_REF_TO_TEXTURE;
 import static com.jogamp.opengl.GL2ES2.GL_DEPTH_COMPONENT;
 import static com.jogamp.opengl.GL2ES2.GL_TEXTURE_COMPARE_FUNC;
 import static com.jogamp.opengl.GL2ES2.GL_TEXTURE_COMPARE_MODE;
+import static com.jogamp.opengl.GL2GL3.GL_FILL;
 import static com.jogamp.opengl.GL2GL3.GL_TEXTURE_CUBE_MAP_SEAMLESS;
+import static com.jogamp.opengl.GL3ES3.GL_PATCHES;
+import static com.jogamp.opengl.GL3ES3.GL_PATCH_VERTICES;
 import static com.jogamp.opengl.GL4.*;
 import com.jogamp.opengl.*;
 import com.jogamp.opengl.awt.GLCanvas;
@@ -59,7 +63,7 @@ import org.joml.*;
 
 public class Code extends JFrame implements GLEventListener, KeyListener
 {	private GLCanvas myCanvas;
-	private int renderingProgram1, renderingProgram2, renderingProgramCone, renderingProgramCubeMap;
+	private int renderingProgram1, renderingProgram2, renderingProgramGeom, renderingProgramTess, renderingProgramCubeMap;
 	private final int numOfModels = 9;
 	private final int numOfObjects = numOfModels + 5;
 	private int numOfBuffersPerObject = 3;
@@ -156,14 +160,21 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 	private Matrix4f shadowMVP2 = new Matrix4f();
 	private Matrix4f b = new Matrix4f();
 
+	//Tessellation
+	private Vector3f terLoc = new Vector3f(0.0f, -1.0f, -3.3f);
+	private int floorTexture;
+	private float tessInner = 30.0f;
+	private float tessOuter = 20.0f;
+
 	// allocate variables for display() function
 	private FloatBuffer vals = Buffers.newDirectFloatBuffer(16);
 	private Matrix4f pMat = new Matrix4f();  // perspective matrix
 	private Matrix4f vMat = new Matrix4f();  // view matrix
 	private Matrix4f mMat = new Matrix4f();  // model matrix
 	private Matrix4f mvMat = new Matrix4f(); // model-view matrix
+	private Matrix4f mvpMat = new Matrix4f();
 	private Matrix4f invTrMat = new Matrix4f(); // inverse-transpose
-	private int mLoc, vLoc, pLoc, nLoc, sLoc, alphaLoc, flipLoc;
+	private int mLoc, vLoc, pLoc, nLoc, sLoc, alphaLoc, flipLoc, mvpLoc;
 	private boolean transparent;
 	private int globalAmbLoc, ambLoc, diffLoc, specLoc, posLoc, mambLoc, mdiffLoc, mspecLoc, mshiLoc;
 	private float aspect;
@@ -238,7 +249,8 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 
 		renderingProgram1 = Utils.createShaderProgram("a4/vert1shader.glsl", "a4/frag1shader.glsl");
 		renderingProgram2 = Utils.createShaderProgram("a4/vert2shader.glsl", "a4/frag2shader.glsl");
-		renderingProgramCone = Utils.createShaderProgram("a4/vert2shader.glsl", "a4/geomShader.glsl", "a4/frag2shader.glsl");
+		renderingProgramGeom = Utils.createShaderProgram("a4/vertGeomShader.glsl", "a4/geomShader.glsl", "a4/fragGeomShader.glsl");
+		renderingProgramTess = Utils.createShaderProgram("a4/vertShader.glsl", "a4/tessCShader.glsl", "a4/tessEShader.glsl", "a4/fragShader.glsl");
 		renderingProgramCubeMap = Utils.createShaderProgram("a4/vertCShader.glsl", "a4/fragCShader.glsl");
 
 		aspect = (float) myCanvas.getWidth() / (float) myCanvas.getHeight();
@@ -250,6 +262,9 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 
 		setupVertices();
 		setupShadowBuffers();
+
+		//Tessellation Texture
+		floorTexture = Utils.loadTexture("textures/floor_color.jpg");
 				
 		b.set(
 			0.5f, 0.0f, 0.0f, 0.0f,
@@ -298,6 +313,9 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 		gl.glDisable(GL_DEPTH_TEST);
 		gl.glDrawArrays(GL_TRIANGLES, 0, 36);
 		gl.glEnable(GL_DEPTH_TEST);
+		gl.glClear(GL_DEPTH_BUFFER_BIT);
+		tessellation(gl);
+		gl.glEnable(GL_DEPTH_TEST);
 
 		//Clears color & depth buffers to default and uses prev. created renderingProgram object
 		gl.glDisable(GL_CULL_FACE);
@@ -333,6 +351,7 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 		gl.glDrawBuffer(GL_FRONT);
 		
 		passTwo();
+
 	}
 //+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 	public void passOne()
@@ -389,12 +408,12 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 				transparent = true;
 			else if (i == 8){ 
 				gl.glClear(GL_DEPTH_BUFFER_BIT);
-				gl.glUseProgram(renderingProgramCone);
-				mLoc = gl.glGetUniformLocation(renderingProgramCone, "m_matrix");
-				vLoc = gl.glGetUniformLocation(renderingProgramCone, "v_matrix");
-				pLoc = gl.glGetUniformLocation(renderingProgramCone, "p_matrix");
-				nLoc = gl.glGetUniformLocation(renderingProgramCone, "norm_matrix");
-				sLoc = gl.glGetUniformLocation(renderingProgramCone, "shadowMVP");
+				gl.glUseProgram(renderingProgramGeom);
+				mLoc = gl.glGetUniformLocation(renderingProgramGeom, "m_matrix");
+				vLoc = gl.glGetUniformLocation(renderingProgramGeom, "v_matrix");
+				pLoc = gl.glGetUniformLocation(renderingProgramGeom, "p_matrix");
+				nLoc = gl.glGetUniformLocation(renderingProgramGeom, "norm_matrix");
+				sLoc = gl.glGetUniformLocation(renderingProgramGeom, "shadowMVP");
 			}
 			else if (i == 9) {
 				gl.glClear(GL_DEPTH_BUFFER_BIT);
@@ -424,7 +443,7 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 			mMat = modelMatrices[i];
 			
 			//Specific lighting for chamber w/ geom shader
-			if (i == 8) installLights(renderingProgramCone);
+			if (i == 8) installLights(renderingProgramGeom);
 			else installLights(renderingProgram2);
 
 			shadowMVP2.identity();
@@ -511,6 +530,39 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 				gl.glDrawArrays(GL_TRIANGLES, 0, models[i].getNumVertices());
 			}
 		}
+	}
+
+	public void tessellation(GL4 gl){
+		gl.glUseProgram(renderingProgramTess);
+		
+		gl.glDisable(GL_CULL_FACE);
+		gl.glFrontFace(GL_CCW);
+		gl.glEnable(GL_DEPTH_TEST);
+		gl.glDepthFunc(GL_LEQUAL);
+		mvpLoc = gl.glGetUniformLocation(renderingProgramTess, "mvp");
+		
+		vMat.set(cam.buildViewMatrix());
+		
+		mMat.identity().setTranslation(terLoc.x(), terLoc.y(), terLoc.z());
+		mMat.scale(7.0f, 7.0f, 7.0f);
+		mMat.rotateX((float) Math.toRadians(90.0f));
+		mMat.rotateY((float) Math.toRadians(1800.0f));
+
+		mvpMat.identity();
+		mvpMat.mul(pMat);
+		mvpMat.mul(vMat);
+		mvpMat.mul(mMat);
+		
+		gl.glUniformMatrix4fv(mvpLoc, 1, false, mvpMat.get(vals));
+		
+		gl.glActiveTexture(GL_TEXTURE0);
+		gl.glBindTexture(GL_TEXTURE_2D, floorTexture);
+	
+		gl.glFrontFace(GL_CCW);
+
+		gl.glPatchParameteri(GL_PATCH_VERTICES, 16);
+		gl.glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+		gl.glDrawArrays(GL_PATCHES, 0, 16);
 	}
 
 	
