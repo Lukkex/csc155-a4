@@ -174,7 +174,7 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 	private Matrix4f mvMat = new Matrix4f(); // model-view matrix
 	private Matrix4f mvpMat = new Matrix4f();
 	private Matrix4f invTrMat = new Matrix4f(); // inverse-transpose
-	private int mLoc, vLoc, pLoc, nLoc, sLoc, alphaLoc, flipLoc, mvpLoc;
+	private int mLoc, vLoc, pLoc, nLoc, sLoc, alphaLoc, flipLoc, mvpLoc, hueLoc;
 	private boolean transparent;
 	private int globalAmbLoc, ambLoc, diffLoc, specLoc, posLoc, mambLoc, mdiffLoc, mspecLoc, mshiLoc;
 	private float aspect;
@@ -187,12 +187,17 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 	private float IOD = 0.01f;  // tunable interocular distance – we arrived at 0.01 for this scene by trial-and-error
 	private float near = 0.01f;
 	private float far = 100.0f;
-	private int sizeX = 1920, sizeY = 1080;
 
+	private int sizeX = 720, sizeY = 720;
+
+	//Trippy Hue Effect
+	private float startTime;
+	private float elapsedTime;
+	private float hue = 0.0f;
 
 	public Code()
 	{	setTitle("CSC155 - Lab #4");
-		setSize(1000, 1000);
+		setSize(sizeX, sizeY);
 		myCanvas = new GLCanvas();
 		myCanvas.addGLEventListener(this);
 		myCanvas.addKeyListener(this);
@@ -213,6 +218,8 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 
 	public void init(GLAutoDrawable drawable){	
 		GL4 gl = (GL4) GLContext.getCurrentGL();
+
+		startTime = System.currentTimeMillis();
 
 		//Sets all mMats for all models to a default identity matrix
 		for (int i = 0; i < numOfObjects; i++){
@@ -281,7 +288,7 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 
 		//Tessellation Texture
 		floorTexture = Utils.loadTexture("textures/floor_color.jpg");
-				
+
 		b.set(
 			0.5f, 0.0f, 0.0f, 0.0f,
 			0.0f, 0.5f, 0.0f, 0.0f,
@@ -299,6 +306,11 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 
 		gl.glClear(GL_COLOR_BUFFER_BIT);
 		gl.glClear(GL_DEPTH_BUFFER_BIT);
+
+		//Calculates delta time, used in movement functions to standardize speed across devices
+		calculateDeltaTime();
+
+		hue += deltaTime/1000;
 
 		gl.glColorMask(true, false, false, false);
 		scene(-3.0f);
@@ -327,6 +339,9 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 
 		pLoc = gl.glGetUniformLocation(renderingProgramCubeMap, "p_matrix");
 		gl.glUniformMatrix4fv(pLoc, 1, false, pMat.get(vals));
+
+		hueLoc = gl.glGetUniformLocation(renderingProgramCubeMap, "hueAdjust");
+		gl.glProgramUniform1f(renderingProgramCubeMap, hueLoc, hue);
 				
 		gl.glBindBuffer(GL_ARRAY_BUFFER, skyboxVBO[0]);
 		gl.glVertexAttribPointer(0, 3, GL_FLOAT, false, 0, 0);
@@ -347,9 +362,6 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 		//Clears color & depth buffers to default and uses prev. created renderingProgram object
 		gl.glDisable(GL_CULL_FACE);
 		gl.glUseProgram(renderingProgram1);
-
-		//Calculates delta time, used in movement functions to standardize speed across devices
-		calculateDeltaTime();
 		
 		currentLightPos.set(lightLoc);
 		currentLightPos.rotateAxis((float)Math.toRadians(amt), 0.0f, 0.0f, 1.0f);
@@ -436,24 +448,6 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 			transparent = false;
 			if (i == 2 || i == 3 || i == 6 || i == 7)//Transparent Glass Chamber / Stars
 				transparent = true;
-			else if (i == 8){ 
-				gl.glClear(GL_DEPTH_BUFFER_BIT);
-				gl.glUseProgram(renderingProgramGeom);
-				mLoc = gl.glGetUniformLocation(renderingProgramGeom, "m_matrix");
-				vLoc = gl.glGetUniformLocation(renderingProgramGeom, "v_matrix");
-				pLoc = gl.glGetUniformLocation(renderingProgramGeom, "p_matrix");
-				nLoc = gl.glGetUniformLocation(renderingProgramGeom, "norm_matrix");
-				sLoc = gl.glGetUniformLocation(renderingProgramGeom, "shadowMVP");
-			}
-			else if (i == 9) {
-				gl.glClear(GL_DEPTH_BUFFER_BIT);
-				gl.glUseProgram(renderingProgram2);
-				mLoc = gl.glGetUniformLocation(renderingProgram2, "m_matrix");
-				vLoc = gl.glGetUniformLocation(renderingProgram2, "v_matrix");
-				pLoc = gl.glGetUniformLocation(renderingProgram2, "p_matrix");
-				nLoc = gl.glGetUniformLocation(renderingProgram2, "norm_matrix");
-				sLoc = gl.glGetUniformLocation(renderingProgram2, "shadowMVP");
-			}
 
 			if (i%2 == 0) material = 1;
 			else material = 0;
@@ -474,8 +468,7 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 			mMat = modelMatrices[i];
 			
 			//Specific lighting for chamber w/ geom shader
-			if (i == 8) installLights(renderingProgramGeom);
-			else installLights(renderingProgram2);
+			installLights(renderingProgram2);
 
 			shadowMVP2.identity();
 			shadowMVP2.mul(b);
@@ -491,6 +484,7 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 			gl.glUniformMatrix4fv(pLoc, 1, false, pMat.get(vals));
 			gl.glUniformMatrix4fv(nLoc, 1, false, invTrMat.get(vals));
 			gl.glUniformMatrix4fv(sLoc, 1, false, shadowMVP2.get(vals));
+			gl.glProgramUniform1f(renderingProgram2, hueLoc, hue);
 
 			if (transparent){
 				gl.glProgramUniform1f(renderingProgram2, alphaLoc, 1.0f);
@@ -583,7 +577,10 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 		mvpMat.mul(mMat);
 		
 		gl.glUniformMatrix4fv(mvpLoc, 1, false, mvpMat.get(vals));
-		
+
+		hueLoc = gl.glGetUniformLocation(renderingProgramTess, "hueAdjust");
+		gl.glProgramUniform1f(renderingProgramTess, hueLoc, hue);
+
 		gl.glActiveTexture(GL_TEXTURE0);
 		gl.glBindTexture(GL_TEXTURE_2D, floorTexture);
 	
@@ -608,7 +605,7 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 			//If Ghoul, then hover up and down
 			if (i == 0){ 
 				material = 1; //2nd material
-				temp.translation(0, (float) java.lang.Math.cos((double) ((deltaTime * floatingState)))/5000 * 10, 0);
+				temp.translation(0, (float) java.lang.Math.cos((double) ((floatingState * 5)))/5000 * 10, 0);
 				mMat.mul(temp); 
 				floatingState += movementSpeed/10;
 				floatingState %= (2 * java.lang.Math.PI);
@@ -775,6 +772,14 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 		deltaTime = (float)(curTime - lastTime);
 		lastTime = curTime;
 		return deltaTime;
+	}
+
+	//Calculates the amount of time elapsed since beginning of program
+	public float timeElapsed(){
+		elapsedTime = System.currentTimeMillis();
+		elapsedTime -= startTime;
+		if (elapsedTime > 300000) startTime = System.currentTimeMillis(); //Every 5 minutes, reset startTime so it doesn't overflow
+		return elapsedTime;
 	}
 
 	//Getters and setters
