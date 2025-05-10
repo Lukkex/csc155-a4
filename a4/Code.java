@@ -114,7 +114,7 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 	//Lights
 	private float amt = 0.0f;
 	private Vector3f cameraLoc = new Vector3f(DEFAULT_CAM_X, DEFAULT_CAM_Y, DEFAULT_CAM_Z);
-	private Vector3f lightLoc = new Vector3f(-3.8f, 2.2f, 1.1f);
+	private Vector3f lightLoc = new Vector3f(-9.8f, 2.2f, 1.1f);
 	
 	//White light properties
 	float[] globalAmbient = new float[] { 0.8f, 0.8f, 0.8f, 1.0f };
@@ -300,7 +300,7 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 		calculateDeltaTime();
 		
 		currentLightPos.set(lightLoc);
-		currentLightPos.rotateAxis((float)Math.toRadians(amt * deltaTime), 0.0f, 0.0f, 1.0f);
+		currentLightPos.rotateAxis((float)Math.toRadians(amt), 0.0f, 0.0f, 1.0f);
 
 		updateObjects(gl);
 		
@@ -392,7 +392,6 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 			
 			mMat = modelMatrices[i];
 			
-			currentLightPos.set(lightLoc);
 			installLights(renderingProgram2);
 
 			shadowMVP2.identity();
@@ -562,6 +561,8 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 			norBuf = Buffers.newDirectFloatBuffer(nvalues);
 			gl.glBufferData(GL_ARRAY_BUFFER, norBuf.limit()*4,norBuf, GL_STATIC_DRAW);
 		}
+
+
 
 		//Skybox
 		// cube
