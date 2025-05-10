@@ -183,6 +183,13 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 	private Vector3f origin = new Vector3f(0.0f, 0.0f, 0.0f);
 	private Vector3f up = new Vector3f(0.0f, 1.0f, 0.0f);
 	
+	// VR stuff
+	private float IOD = 0.01f;  // tunable interocular distance – we arrived at 0.01 for this scene by trial-and-error
+	private float near = 0.01f;
+	private float far = 100.0f;
+	private int sizeX = 1920, sizeY = 1080;
+
+
 	public Code()
 	{	setTitle("CSC155 - Lab #4");
 		setSize(1000, 1000);
@@ -193,6 +200,15 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 		this.setVisible(true);
 		Animator animator = new Animator(myCanvas);
 		animator.start();
+	}
+
+	private void computePerspectiveMatrix(float leftRight)
+	{	float top = (float)Math.tan(1.0472f / 2.0f) * (float)near;
+		float bottom = -top;
+		float frustumshift = (IOD / 2.0f) * near / far;
+		float left = -aspect * top - frustumshift * leftRight;
+		float right = aspect * top - frustumshift * leftRight;
+		pMat.setFrustum(left, right, bottom, top, near, far);
 	}
 
 	public void init(GLAutoDrawable drawable){	
@@ -284,8 +300,19 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 		gl.glClear(GL_COLOR_BUFFER_BIT);
 		gl.glClear(GL_DEPTH_BUFFER_BIT);
 
+		gl.glColorMask(true, false, false, false);
+		scene(-3.0f);
+				
+		gl.glClear(GL_DEPTH_BUFFER_BIT);
+		
+		gl.glColorMask(false, true, true, false);
+		scene(3.0f);
+	}
+
+	public void scene(float leftRight){
+		GL4 gl = (GL4) GLContext.getCurrentGL();
 		//Get view matrix for the current frame
-		vMat.set(cam.buildViewMatrix());
+		vMat.set(cam.buildVRViewMatrix(leftRight * IOD/2.0f));
 		
 		// draw cube map
 		gl.glUseProgram(renderingProgramCubeMap);
@@ -341,6 +368,10 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 		gl.glPolygonOffset(3.0f, 5.0f);		//  shadow artifacts
 
 		passOne();
+		
+		computePerspectiveMatrix(leftRight);
+		mvLoc = gl.glGetUniformLocation(renderingProgram1, "mv_matrix");
+		pLoc = gl.glGetUniformLocation(renderingProgram1, "p_matrix");
 		
 		gl.glDisable(GL_POLYGON_OFFSET_FILL);	// artifact reduction, continued
 		
@@ -398,8 +429,7 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 		sLoc = gl.glGetUniformLocation(renderingProgram2, "shadowMVP");
 		alphaLoc = gl.glGetUniformLocation(renderingProgram2, "alpha");
 		flipLoc = gl.glGetUniformLocation(renderingProgram2, "flipNormal");
-		
-		vMat.set(cam.buildViewMatrix());
+
 		gl.glClear(GL_DEPTH_BUFFER_BIT);
 
 		for (int i = 0; i < numOfModels; i++){
@@ -426,6 +456,7 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 			}
 
 			if (i%2 == 0) material = 1;
+			else material = 0;
 			
 			if (material == 0){
 				thisAmb = GmatAmb;
@@ -541,8 +572,6 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 		gl.glDepthFunc(GL_LEQUAL);
 		mvpLoc = gl.glGetUniformLocation(renderingProgramTess, "mvp");
 		
-		vMat.set(cam.buildViewMatrix());
-		
 		mMat.identity().setTranslation(terLoc.x(), terLoc.y(), terLoc.z());
 		mMat.scale(7.0f, 7.0f, 7.0f);
 		mMat.rotateX((float) Math.toRadians(90.0f));
@@ -574,7 +603,6 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 			mMat = modelMatrices[i];
 			invTrMat = invTrsMatrices[i];
 			invTrMat.identity();
-
 			material = DEFAULT_MATERIAL; //default is 0
 
 			//If Ghoul, then hover up and down

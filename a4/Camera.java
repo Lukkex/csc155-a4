@@ -44,6 +44,21 @@ public class Camera {
         return viewMatrix;
     }
 
+        //Creates view matrix using U, V, N vectors and camera position
+    public Matrix4f buildVRViewMatrix(float offset){
+        viewMatrixT.set(1f, 0f, 0f, 0f,
+                       0f, 1f, 0f, 0f,
+                       0f, 0f, 1f, 0f,
+                       -location.x() + offset, -location.y(), -location.z(), 1f);
+        viewMatrixR.set(U.x(), V.x(), -N.x(), 0f,
+                       U.y(), V.y(), -N.y(), 0f,
+                       U.z(), V.z(), -N.z(), 0f,
+                       0f, 0f, 0f, 1f);
+        viewMatrix.identity().mul(viewMatrixR).mul(viewMatrixT);
+
+        return viewMatrix;
+    }
+
     //Returns new Vector3f of N so it doesn't change N when mul is done to the Vector3f
     public Vector3f getN(){
         return new Vector3f(N);
