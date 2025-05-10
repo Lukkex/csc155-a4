@@ -2,6 +2,8 @@
 
 in vec3 varyingNormal, varyingLightDir, varyingVertPos, varyingHalfVec;
 in vec4 shadow_coord;
+in vec2 tc;
+in vec3 vertEyeSpacePos;
 out vec4 fragColor;
  
 struct PositionalLight
@@ -23,17 +25,24 @@ uniform mat4 p_matrix;
 uniform mat4 norm_matrix;
 uniform mat4 shadowMVP;
 layout (binding=0) uniform sampler2DShadow shadowTex;
+layout (binding=1) uniform sampler2D s;
 
 void main(void)
 {	vec3 L = normalize(varyingLightDir);
 	vec3 N = normalize(varyingNormal);
 	vec3 V = normalize(-v_matrix[3].xyz - varyingVertPos);
 	vec3 H = normalize(varyingHalfVec);
+
+	vec4 fogColor = vec4(0.7, 0.8, 0.9, 1.0);	// bluish gray
+	float fogStart = 4;
+	float fogEnd = 5.8;
 	
 	float notInShadow = textureProj(shadowTex, shadow_coord);
-	
-	fragColor = globalAmbient * material.ambient
-				+ light.ambient * material.ambient;
+	float dist = length(vertEyeSpacePos.xyz);
+	float fogFactor = clamp(((fogEnd-dist)/(fogEnd-fogStart)), 0.0, 1.0);
+
+	fragColor = mix(fogColor, (globalAmbient * material.ambient
+				+ light.ambient * material.ambient + texture(s,tc)), fogFactor);
 
 	if (notInShadow == 1.0)
 	{	fragColor += light.diffuse * material.diffuse * max(dot(L,N),0.0)

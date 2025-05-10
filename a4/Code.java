@@ -55,7 +55,7 @@ import org.joml.*;
 public class Code extends JFrame implements GLEventListener, KeyListener
 {	private GLCanvas myCanvas;
 	private int renderingProgram1, renderingProgram2, renderingProgramCubeMap;
-	private final int numOfModels = 10;
+	private final int numOfModels = 9;
 	private final int numOfObjects = numOfModels + 5;
 	private int numOfBuffersPerObject = 3;
 	private ImportedModel models[] = new ImportedModel[numOfModels];
@@ -112,18 +112,8 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 	private float axisLineLength = 50f; //Made to be large enough so you can see it outside the inner chamber
 
 	//Lights
-	private Vector3f initialLightLoc = new Vector3f(0.0f, 2.6f, 0.0f);
 	private float amt = 0.0f;
-
-	// model stuff
-	private ImportedModel pyramid;
-	private Torus myTorus;
-	private int numPyramidVertices, numTorusVertices, numTorusIndices;
-	
-	// location of torus, pyramid, light, and camera
-	private Vector3f torusLoc = new Vector3f(1.6f, 0.0f, -0.3f);
-	private Vector3f pyrLoc = new Vector3f(-1.0f, 0.1f, 0.3f);
-	private Vector3f cameraLoc = new Vector3f(0.0f, 0.2f, 6.0f);
+	private Vector3f cameraLoc = new Vector3f(DEFAULT_CAM_X, DEFAULT_CAM_Y, DEFAULT_CAM_Z);
 	private Vector3f lightLoc = new Vector3f(-3.8f, 2.2f, 1.1f);
 	
 	//White light properties
@@ -136,28 +126,16 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 	private final int DEFAULT_MATERIAL = 0;
 	private int material = DEFAULT_MATERIAL;
 
-	//Material 1 (Reddish)
-	float[] goldMatAmb = {1.0f, 0.3f, 0.3f};
-	float[] goldMatDif = {0.7f, 0.2f, 0.2f};
-	float[] goldMatSpe = {0.7f, 0.7f, 0.7f};
-	float goldMatShi = Utils.goldShininess();
-
-	//Material 2 (White)
-	float[] bronzeMatAmb = {0.7f, 0.7f, 0.7f};
-	float[] bronzeMatDif = {0.7f, 0.7f, 0.7f};
-	float[] bronzeMatSpe = {0.7f, 0.7f, 0.7f};
-	float bronzeMatShi = Utils.bronzeShininess();
-		
-	// gold material
-	private float[] GmatAmb = Utils.goldAmbient();
-	private float[] GmatDif = Utils.goldDiffuse();
-	private float[] GmatSpe = Utils.goldSpecular();
+	// material 1
+	private float[] GmatAmb = {0.3f, 0.3f, 0.3f};
+	private float[] GmatDif = {0.4f, 0.4f, 0.4f};
+	private float[] GmatSpe = {0.4f, 0.4f, 0.4f};
 	private float GmatShi = Utils.goldShininess();
 	
-	// bronze material
-	private float[] BmatAmb = Utils.bronzeAmbient();
-	private float[] BmatDif = Utils.bronzeDiffuse();
-	private float[] BmatSpe = Utils.bronzeSpecular();
+	// material 2
+	private float[] BmatAmb = {0.2f, 0.2f, 0.2f};
+	private float[] BmatDif = {0.2f, 0.2f, 0.2f};
+	private float[] BmatSpe = {0.2f, 0.2f, 0.2f};
 	private float BmatShi = Utils.bronzeShininess();
 	
 	private float[] thisAmb, thisDif, thisSpe, matAmb, matDif, matSpe;
@@ -210,6 +188,7 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 		}
 
 		models[0] = new ImportedModel("models/GHOUL.obj");
+		textures[0] = Utils.loadTexture("textures/GHOUL.jpg");
 
 		models[1] = new ImportedModel("models/Sanctum.obj");
 		textures[1] = Utils.loadTexture("textures/Sanctum.jpg");
@@ -238,11 +217,6 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 		models[8] = new ImportedModel("models/Cone.obj");
 		textures[8] = Utils.loadTexture("textures/brick1.jpg"); //From the book
 		modelMatrices[8].translate(new Vector3f(0f, -0.25f, 0f)); // Starts off lower in the world
-
-		models[9] = new ImportedModel("models/pyr.obj");
-		modelMatrices[9].translate(pyrLoc.x(), pyrLoc.y(), pyrLoc.z());
-		modelMatrices[9].rotateX((float)Math.toRadians(30.0f));
-		modelMatrices[9].rotateY((float)Math.toRadians(40.0f));
 
 		//Objects without any external models
 		textures[numOfModels] = Utils.loadTexture("textures/eyefloor.png"); //Custom
@@ -401,10 +375,20 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 		gl.glClear(GL_DEPTH_BUFFER_BIT);
 
 		for (int i = 0; i < numOfModels; i++){
-			thisAmb = GmatAmb; // the pyramid is gold
-			thisDif = GmatDif;
-			thisSpe = GmatSpe;
-			thisShi = GmatShi;
+			if (i%2 == 0) material = 1;
+			
+			if (material == 0){
+				thisAmb = GmatAmb;
+				thisDif = GmatDif;
+				thisSpe = GmatSpe;
+				thisShi = GmatShi;
+			}
+			else if (material == 1){
+				thisAmb = BmatAmb;
+				thisDif = BmatDif;
+				thisSpe = BmatSpe;
+				thisShi = BmatShi;
+			}
 			
 			mMat = modelMatrices[i];
 			
@@ -430,20 +414,18 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 			gl.glVertexAttribPointer(0, 3, GL_FLOAT, false, 0, 0);
 			gl.glEnableVertexAttribArray(0);
 
-			/* 
 			gl.glBindBuffer(GL_ARRAY_BUFFER, vbo[(i*numOfBuffersPerObject)+2]);
-			gl.glVertexAttribPointer(1, 2, GL_FLOAT, false, 0, 0);
-			gl.glEnableVertexAttribArray(1);
-			*/
+			gl.glVertexAttribPointer(1, 3, GL_FLOAT, false, 0, 0);
+			gl.glEnableVertexAttribArray(1); 
 
+			gl.glBindBuffer(GL_ARRAY_BUFFER, vbo[(i*numOfBuffersPerObject)+1]);
+			gl.glVertexAttribPointer(2, 2, GL_FLOAT, false, 0, 0);
+			gl.glEnableVertexAttribArray(2);
+			
 			gl.glActiveTexture(GL_TEXTURE1);
 			gl.glBindTexture(GL_TEXTURE_2D, textures[i]);
 
-			gl.glBindBuffer(GL_ARRAY_BUFFER, vbo[(i*numOfBuffersPerObject)+2]);
-			gl.glVertexAttribPointer(1, 3, GL_FLOAT, false, 0, 0);
-			gl.glEnableVertexAttribArray(1);
-
-			gl.glEnable(GL_CULL_FACE);
+			gl.glDisable(GL_CULL_FACE);
 			gl.glFrontFace(GL_CCW);
 			gl.glEnable(GL_DEPTH_TEST);
 			gl.glDepthFunc(GL_LEQUAL);
@@ -606,7 +588,9 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 	private void installLights(int renderingProgram)
 	{	GL4 gl = (GL4) GLContext.getCurrentGL();
 
-		lightPos[0]=currentLightPos.x(); lightPos[1]=currentLightPos.y(); lightPos[2]=currentLightPos.z();
+		lightPos[0]=currentLightPos.x(); 
+		lightPos[1]=currentLightPos.y(); 
+		lightPos[2]=currentLightPos.z();
 		
 		// set current material values
 		matAmb = thisAmb;
