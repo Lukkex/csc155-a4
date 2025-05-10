@@ -7,6 +7,8 @@ import javax.swing.*;
 import java.lang.Math;
 
 import static com.jogamp.opengl.GL.GL_ARRAY_BUFFER;
+import static com.jogamp.opengl.GL.GL_BACK;
+import static com.jogamp.opengl.GL.GL_BLEND;
 import static com.jogamp.opengl.GL.GL_CCW;
 import static com.jogamp.opengl.GL.GL_CLAMP_TO_EDGE;
 import static com.jogamp.opengl.GL.GL_COLOR_BUFFER_BIT;
@@ -19,13 +21,16 @@ import static com.jogamp.opengl.GL.GL_ELEMENT_ARRAY_BUFFER;
 import static com.jogamp.opengl.GL.GL_FLOAT;
 import static com.jogamp.opengl.GL.GL_FRAMEBUFFER;
 import static com.jogamp.opengl.GL.GL_FRONT;
+import static com.jogamp.opengl.GL.GL_FUNC_ADD;
 import static com.jogamp.opengl.GL.GL_LEQUAL;
 import static com.jogamp.opengl.GL.GL_LINEAR;
 import static com.jogamp.opengl.GL.GL_LINES;
 import static com.jogamp.opengl.GL.GL_NONE;
+import static com.jogamp.opengl.GL.GL_ONE_MINUS_SRC_ALPHA;
 import static com.jogamp.opengl.GL.GL_POINTS;
 import static com.jogamp.opengl.GL.GL_POLYGON_OFFSET_FILL;
 import static com.jogamp.opengl.GL.GL_REPEAT;
+import static com.jogamp.opengl.GL.GL_SRC_ALPHA;
 import static com.jogamp.opengl.GL.GL_STATIC_DRAW;
 import static com.jogamp.opengl.GL.GL_TEXTURE0;
 import static com.jogamp.opengl.GL.GL_TEXTURE1;
@@ -54,7 +59,7 @@ import org.joml.*;
 
 public class Code extends JFrame implements GLEventListener, KeyListener
 {	private GLCanvas myCanvas;
-	private int renderingProgram1, renderingProgram2, renderingProgramCubeMap;
+	private int renderingProgram1, renderingProgram2, renderingProgramCone, renderingProgramCubeMap;
 	private final int numOfModels = 9;
 	private final int numOfObjects = numOfModels + 5;
 	private int numOfBuffersPerObject = 3;
@@ -158,7 +163,8 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 	private Matrix4f mMat = new Matrix4f();  // model matrix
 	private Matrix4f mvMat = new Matrix4f(); // model-view matrix
 	private Matrix4f invTrMat = new Matrix4f(); // inverse-transpose
-	private int mLoc, vLoc, pLoc, nLoc, sLoc;
+	private int mLoc, vLoc, pLoc, nLoc, sLoc, alphaLoc, flipLoc;
+	private boolean transparent;
 	private int globalAmbLoc, ambLoc, diffLoc, specLoc, posLoc, mambLoc, mdiffLoc, mspecLoc, mshiLoc;
 	private float aspect;
 	private Vector3f currentLightPos = new Vector3f();
@@ -232,6 +238,7 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 
 		renderingProgram1 = Utils.createShaderProgram("a4/vert1shader.glsl", "a4/frag1shader.glsl");
 		renderingProgram2 = Utils.createShaderProgram("a4/vert2shader.glsl", "a4/frag2shader.glsl");
+		renderingProgramCone = Utils.createShaderProgram("a4/vert2shader.glsl", "a4/geomShader.glsl", "a4/frag2shader.glsl");
 		renderingProgramCubeMap = Utils.createShaderProgram("a4/vertCShader.glsl", "a4/fragCShader.glsl");
 
 		aspect = (float) myCanvas.getWidth() / (float) myCanvas.getHeight();
@@ -370,11 +377,35 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 		pLoc = gl.glGetUniformLocation(renderingProgram2, "p_matrix");
 		nLoc = gl.glGetUniformLocation(renderingProgram2, "norm_matrix");
 		sLoc = gl.glGetUniformLocation(renderingProgram2, "shadowMVP");
+		alphaLoc = gl.glGetUniformLocation(renderingProgram2, "alpha");
+		flipLoc = gl.glGetUniformLocation(renderingProgram2, "flipNormal");
 		
 		vMat.set(cam.buildViewMatrix());
 		gl.glClear(GL_DEPTH_BUFFER_BIT);
 
 		for (int i = 0; i < numOfModels; i++){
+			transparent = false;
+			if (i == 2 || i == 3 || i == 6 || i == 7)//Transparent Glass Chamber / Stars
+				transparent = true;
+			else if (i == 8){ 
+				gl.glClear(GL_DEPTH_BUFFER_BIT);
+				gl.glUseProgram(renderingProgramCone);
+				mLoc = gl.glGetUniformLocation(renderingProgramCone, "m_matrix");
+				vLoc = gl.glGetUniformLocation(renderingProgramCone, "v_matrix");
+				pLoc = gl.glGetUniformLocation(renderingProgramCone, "p_matrix");
+				nLoc = gl.glGetUniformLocation(renderingProgramCone, "norm_matrix");
+				sLoc = gl.glGetUniformLocation(renderingProgramCone, "shadowMVP");
+			}
+			else if (i == 9) {
+				gl.glClear(GL_DEPTH_BUFFER_BIT);
+				gl.glUseProgram(renderingProgram2);
+				mLoc = gl.glGetUniformLocation(renderingProgram2, "m_matrix");
+				vLoc = gl.glGetUniformLocation(renderingProgram2, "v_matrix");
+				pLoc = gl.glGetUniformLocation(renderingProgram2, "p_matrix");
+				nLoc = gl.glGetUniformLocation(renderingProgram2, "norm_matrix");
+				sLoc = gl.glGetUniformLocation(renderingProgram2, "shadowMVP");
+			}
+
 			if (i%2 == 0) material = 1;
 			
 			if (material == 0){
@@ -392,7 +423,9 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 			
 			mMat = modelMatrices[i];
 			
-			installLights(renderingProgram2);
+			//Specific lighting for chamber w/ geom shader
+			if (i == 8) installLights(renderingProgramCone);
+			else installLights(renderingProgram2);
 
 			shadowMVP2.identity();
 			shadowMVP2.mul(b);
@@ -408,49 +441,81 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 			gl.glUniformMatrix4fv(pLoc, 1, false, pMat.get(vals));
 			gl.glUniformMatrix4fv(nLoc, 1, false, invTrMat.get(vals));
 			gl.glUniformMatrix4fv(sLoc, 1, false, shadowMVP2.get(vals));
-			
-			gl.glBindBuffer(GL_ARRAY_BUFFER, vbo[i*numOfBuffersPerObject]);
-			gl.glVertexAttribPointer(0, 3, GL_FLOAT, false, 0, 0);
-			gl.glEnableVertexAttribArray(0);
 
-			gl.glBindBuffer(GL_ARRAY_BUFFER, vbo[(i*numOfBuffersPerObject)+2]);
-			gl.glVertexAttribPointer(1, 3, GL_FLOAT, false, 0, 0);
-			gl.glEnableVertexAttribArray(1); 
+			if (transparent){
+				gl.glProgramUniform1f(renderingProgram2, alphaLoc, 1.0f);
+				gl.glProgramUniform1f(renderingProgram2, flipLoc, 1.0f);
+				
+				//Vertices
+				gl.glBindBuffer(GL_ARRAY_BUFFER, vbo[(i*numOfBuffersPerObject)]);
+				gl.glVertexAttribPointer(0, 3, GL_FLOAT, false, 0, 0);
+				gl.glEnableVertexAttribArray(0);
 
-			gl.glBindBuffer(GL_ARRAY_BUFFER, vbo[(i*numOfBuffersPerObject)+1]);
-			gl.glVertexAttribPointer(2, 2, GL_FLOAT, false, 0, 0);
-			gl.glEnableVertexAttribArray(2);
-			
-			gl.glActiveTexture(GL_TEXTURE1);
-			gl.glBindTexture(GL_TEXTURE_2D, textures[i]);
+				//Normals
+				gl.glBindBuffer(GL_ARRAY_BUFFER, vbo[(i*numOfBuffersPerObject)+2]);
+				gl.glVertexAttribPointer(1, 3, GL_FLOAT, false, 0, 0);
+				gl.glEnableVertexAttribArray(1);
+				
+				//Texture Coordinates
+				gl.glBindBuffer(GL_ARRAY_BUFFER, vbo[(i*numOfBuffersPerObject)+1]);
+				gl.glVertexAttribPointer(2, 2, GL_FLOAT, false, 0, 0);
+				gl.glEnableVertexAttribArray(2);
+				
+				gl.glActiveTexture(GL_TEXTURE1);
+				gl.glBindTexture(GL_TEXTURE_2D, textures[i]);
 
-			gl.glDisable(GL_CULL_FACE);
-			gl.glFrontFace(GL_CCW);
-			gl.glEnable(GL_DEPTH_TEST);
-			gl.glDepthFunc(GL_LEQUAL);
+				// 2-pass rendering a transparent version of the pyramid
 
-			gl.glDrawArrays(GL_TRIANGLES, 0, models[i].getNumVertices());
+				gl.glEnable(GL_BLEND);
+				gl.glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+				gl.glBlendEquation(GL_FUNC_ADD);
+
+				gl.glEnable(GL_CULL_FACE);
+				
+				gl.glCullFace(GL_FRONT);
+				gl.glProgramUniform1f(renderingProgram2, alphaLoc, 0.3f);
+				gl.glProgramUniform1f(renderingProgram2, flipLoc, -1.0f);
+				gl.glDrawArrays(GL_TRIANGLES, 0, models[i].getNumVertices());
+				
+				gl.glCullFace(GL_BACK);
+				gl.glProgramUniform1f(renderingProgram2, alphaLoc, 0.7f);
+				gl.glProgramUniform1f(renderingProgram2, flipLoc, 1.0f);
+				gl.glDrawArrays(GL_TRIANGLES, 0, models[i].getNumVertices());
+
+				gl.glDisable(GL_BLEND);
+		
+				transparent = true;
+				// end transparency section
+			}
+			else {
+				gl.glBindBuffer(GL_ARRAY_BUFFER, vbo[i*numOfBuffersPerObject]);
+				gl.glVertexAttribPointer(0, 3, GL_FLOAT, false, 0, 0);
+				gl.glEnableVertexAttribArray(0);
+
+				gl.glBindBuffer(GL_ARRAY_BUFFER, vbo[(i*numOfBuffersPerObject)+2]);
+				gl.glVertexAttribPointer(1, 3, GL_FLOAT, false, 0, 0);
+				gl.glEnableVertexAttribArray(1); 
+
+				gl.glBindBuffer(GL_ARRAY_BUFFER, vbo[(i*numOfBuffersPerObject)+1]);
+				gl.glVertexAttribPointer(2, 2, GL_FLOAT, false, 0, 0);
+				gl.glEnableVertexAttribArray(2);
+				
+				gl.glActiveTexture(GL_TEXTURE1);
+				gl.glBindTexture(GL_TEXTURE_2D, textures[i]);
+
+				gl.glDisable(GL_CULL_FACE);
+				gl.glFrontFace(GL_CCW);
+				gl.glEnable(GL_DEPTH_TEST);
+				gl.glDepthFunc(GL_LEQUAL);
+
+				gl.glDrawArrays(GL_TRIANGLES, 0, models[i].getNumVertices());
+			}
 		}
 	}
 
 	
 	//Update all objects positions (Model Matrices)
-	public void updateObjects(GL4 gl){
-		//Gets int pointer to mv_matrix uniform variable
-		mvLoc = gl.glGetUniformLocation(renderingProgram1, "mv_matrix");
-
-		//Gets int pointer to m_matrix uniform variable
-		mLoc = gl.glGetUniformLocation(renderingProgram1, "m_matrix");
-
-		//Gets int pointer to v_matrix uniform variable
-		vLoc = gl.glGetUniformLocation(renderingProgram1, "v_matrix");
-
-		//Gets int pointer to p_matrix uniform variable
-		pLoc = gl.glGetUniformLocation(renderingProgram1, "p_matrix");
-
-		//Gets int pointer to norm_matrix uniform variable
-		nLoc = gl.glGetUniformLocation(renderingProgram1, "norm_matrix");
-		
+	public void updateObjects(GL4 gl){		
 		//Iterates through every single object (with a model) in the scene and updates their local positions into the world
 		//using their respective model matrix and based on the view, perspective matrices as well
 		for (int i = 0; i < numOfModels; i++){

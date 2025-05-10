@@ -24,6 +24,10 @@ uniform mat4 v_matrix;
 uniform mat4 p_matrix;
 uniform mat4 norm_matrix;
 uniform mat4 shadowMVP;
+
+uniform float alpha;
+uniform float flipNormal;
+
 layout (binding=0) uniform sampler2DShadow shadowTex;
 layout (binding=1) uniform sampler2D s;
 
@@ -49,4 +53,7 @@ void main(void)
 				+ light.specular * material.specular
 				* pow(max(dot(H,N),0.0),material.shininess*3.0);
 	}
+
+	//Transparency
+	fragColor = vec4(fragColor.xyz, alpha);
 }
