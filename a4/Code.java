@@ -13,6 +13,7 @@ import static com.jogamp.opengl.GL.GL_CCW;
 import static com.jogamp.opengl.GL.GL_CLAMP_TO_EDGE;
 import static com.jogamp.opengl.GL.GL_COLOR_BUFFER_BIT;
 import static com.jogamp.opengl.GL.GL_CULL_FACE;
+import static com.jogamp.opengl.GL.GL_CW;
 import static com.jogamp.opengl.GL.GL_DEPTH_ATTACHMENT;
 import static com.jogamp.opengl.GL.GL_DEPTH_BUFFER_BIT;
 import static com.jogamp.opengl.GL.GL_DEPTH_COMPONENT32;
@@ -310,7 +311,7 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 		//Calculates delta time, used in movement functions to standardize speed across devices
 		calculateDeltaTime();
 
-		hue += deltaTime/1000;
+		hue += deltaTime/250;
 
 		gl.glColorMask(true, false, false, false);
 		scene(-3.0f);
@@ -318,7 +319,7 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 		gl.glClear(GL_DEPTH_BUFFER_BIT);
 		
 		gl.glColorMask(false, true, true, false);
-		scene(3.0f);
+		scene(30.0f);
 	}
 
 	public void scene(float leftRight){
@@ -340,8 +341,8 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 		pLoc = gl.glGetUniformLocation(renderingProgramCubeMap, "p_matrix");
 		gl.glUniformMatrix4fv(pLoc, 1, false, pMat.get(vals));
 
-		hueLoc = gl.glGetUniformLocation(renderingProgramCubeMap, "hueAdjust");
-		gl.glProgramUniform1f(renderingProgramCubeMap, hueLoc, hue);
+		//hueLoc = gl.glGetUniformLocation(renderingProgramCubeMap, "hueShift");
+		//gl.glProgramUniform1f(renderingProgramCubeMap, hueLoc, hue);
 				
 		gl.glBindBuffer(GL_ARRAY_BUFFER, skyboxVBO[0]);
 		gl.glVertexAttribPointer(0, 3, GL_FLOAT, false, 0, 0);
@@ -355,6 +356,8 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 		gl.glDisable(GL_DEPTH_TEST);
 		gl.glDrawArrays(GL_TRIANGLES, 0, 36);
 		gl.glEnable(GL_DEPTH_TEST);
+		//gl.glClear(GL_DEPTH_BUFFER_BIT);
+		//geometry(gl);
 		gl.glClear(GL_DEPTH_BUFFER_BIT);
 		tessellation(gl);
 		gl.glEnable(GL_DEPTH_TEST);
@@ -441,6 +444,7 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 		sLoc = gl.glGetUniformLocation(renderingProgram2, "shadowMVP");
 		alphaLoc = gl.glGetUniformLocation(renderingProgram2, "alpha");
 		flipLoc = gl.glGetUniformLocation(renderingProgram2, "flipNormal");
+		hueLoc = gl.glGetUniformLocation(renderingProgram2, "hueShift");
 
 		gl.glClear(GL_DEPTH_BUFFER_BIT);
 
@@ -565,6 +569,7 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 		gl.glEnable(GL_DEPTH_TEST);
 		gl.glDepthFunc(GL_LEQUAL);
 		mvpLoc = gl.glGetUniformLocation(renderingProgramTess, "mvp");
+		//hueLoc = gl.glGetUniformLocation(renderingProgramTess, "hueShift");
 		
 		mMat.identity().setTranslation(terLoc.x(), terLoc.y(), terLoc.z());
 		mMat.scale(7.0f, 7.0f, 7.0f);
@@ -577,10 +582,8 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 		mvpMat.mul(mMat);
 		
 		gl.glUniformMatrix4fv(mvpLoc, 1, false, mvpMat.get(vals));
-
-		hueLoc = gl.glGetUniformLocation(renderingProgramTess, "hueAdjust");
-		gl.glProgramUniform1f(renderingProgramTess, hueLoc, hue);
-
+		//gl.glProgramUniform1f(renderingProgramTess, hueLoc, hue);
+		
 		gl.glActiveTexture(GL_TEXTURE0);
 		gl.glBindTexture(GL_TEXTURE_2D, floorTexture);
 	
@@ -591,6 +594,125 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 		gl.glDrawArrays(GL_PATCHES, 0, 16);
 	}
 
+	/* Weird bugs
+	public void geometry(GL4 gl){
+		Vector3f torusLoc = new Vector3f(0,0,-1);
+		Vector3f cameraLoc = new Vector3f(0,0,1);
+			
+		Torus myTorus = new Torus(0.5f, 0.3f, 36);
+		int numTorusVertices, numTorusIndices;
+		numTorusVertices = myTorus.getNumVertices();
+		numTorusIndices = myTorus.getNumIndices();
+System.out.println("1");
+		Vector3f[] vertices = myTorus.getVertices();
+		Vector2f[] texCoords = myTorus.getTexCoords();
+		Vector3f[] normals = myTorus.getNormals();
+		int[] indices = myTorus.getIndices();
+		int[] torusVBO = new int[4];
+		
+		float[] pvalues = new float[vertices.length*3];
+		float[] tvalues = new float[texCoords.length*2];
+		float[] nvalues = new float[normals.length*3];
+
+		for (int i=0; i<numTorusVertices; i++)
+		{	pvalues[i*3]   = (float) vertices[i].x();
+			pvalues[i*3+1] = (float) vertices[i].y();
+			pvalues[i*3+2] = (float) vertices[i].z();
+			tvalues[i*2]   = (float) texCoords[i].x();
+			tvalues[i*2+1] = (float) texCoords[i].y();
+			nvalues[i*3]   = (float) normals[i].x();
+			nvalues[i*3+1] = (float) normals[i].y();
+			nvalues[i*3+2] = (float) normals[i].z();
+		}
+		
+		gl.glGenVertexArrays(vao.length, vao, 0);
+		gl.glBindVertexArray(vao[0]);
+		gl.glGenBuffers(4, torusVBO, 0);
+		System.out.println("1");
+		gl.glBindBuffer(GL_ARRAY_BUFFER, torusVBO[0]);
+		FloatBuffer vertBuf = Buffers.newDirectFloatBuffer(pvalues);
+		gl.glBufferData(GL_ARRAY_BUFFER, vertBuf.limit()*4, vertBuf, GL_STATIC_DRAW);
+
+		gl.glBindBuffer(GL_ARRAY_BUFFER, torusVBO[1]);
+		FloatBuffer texBuf = Buffers.newDirectFloatBuffer(tvalues);
+		gl.glBufferData(GL_ARRAY_BUFFER, texBuf.limit()*4, texBuf, GL_STATIC_DRAW);
+
+		gl.glBindBuffer(GL_ARRAY_BUFFER, torusVBO[2]);
+		FloatBuffer norBuf = Buffers.newDirectFloatBuffer(nvalues);
+		gl.glBufferData(GL_ARRAY_BUFFER, norBuf.limit()*4, norBuf, GL_STATIC_DRAW);
+		
+		gl.glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, torusVBO[3]);
+		IntBuffer idxBuf = Buffers.newDirectIntBuffer(indices);
+		gl.glBufferData(GL_ELEMENT_ARRAY_BUFFER, idxBuf.limit()*4, idxBuf, GL_STATIC_DRAW);
+System.out.println("1");
+		gl.glUseProgram(renderingProgramGeom);
+
+		mLoc = gl.glGetUniformLocation(renderingProgramGeom, "m_matrix");
+		vLoc = gl.glGetUniformLocation(renderingProgramGeom, "v_matrix");
+		pLoc = gl.glGetUniformLocation(renderingProgramGeom, "p_matrix");
+		nLoc = gl.glGetUniformLocation(renderingProgramGeom, "norm_matrix");
+		int enableLightingLoc = gl.glGetUniformLocation(renderingProgramGeom, "enableLighting");
+		System.out.println("1");
+		mMat.identity();
+		mMat.translate(torusLoc.x(), torusLoc.y(), torusLoc.z());
+		mMat.rotateX((float)Math.toRadians(35.0f));
+		
+		lightPos[0]=currentLightPos.x(); lightPos[1]=currentLightPos.y(); lightPos[2]=currentLightPos.z();
+		
+		// get the locations of the light and material fields in the shader
+		globalAmbLoc = gl.glGetUniformLocation(renderingProgramGeom, "globalAmbient");
+		ambLoc = gl.glGetUniformLocation(renderingProgramGeom, "light.ambient");
+		diffLoc = gl.glGetUniformLocation(renderingProgramGeom, "light.diffuse");
+		specLoc = gl.glGetUniformLocation(renderingProgramGeom, "light.specular");
+		posLoc = gl.glGetUniformLocation(renderingProgramGeom, "light.position");
+		mambLoc = gl.glGetUniformLocation(renderingProgramGeom, "material.ambient");
+		mdiffLoc = gl.glGetUniformLocation(renderingProgramGeom, "material.diffuse");
+		mspecLoc = gl.glGetUniformLocation(renderingProgramGeom, "material.specular");
+		mshiLoc = gl.glGetUniformLocation(renderingProgramGeom, "material.shininess");
+	System.out.println("3");
+		//  set the uniform light and material values in the shader
+		gl.glProgramUniform4fv(renderingProgramGeom, globalAmbLoc, 1, globalAmbient, 0);
+		gl.glProgramUniform4fv(renderingProgramGeom, ambLoc, 1, lightAmbient, 0);
+		gl.glProgramUniform4fv(renderingProgramGeom, diffLoc, 1, lightDiffuse, 0);
+		gl.glProgramUniform4fv(renderingProgramGeom, specLoc, 1, lightSpecular, 0);
+		gl.glProgramUniform3fv(renderingProgramGeom, posLoc, 1, lightPos, 0);
+		gl.glProgramUniform4fv(renderingProgramGeom, mambLoc, 1, matAmb, 0);
+		gl.glProgramUniform4fv(renderingProgramGeom, mdiffLoc, 1, matDif, 0);
+		gl.glProgramUniform4fv(renderingProgramGeom, mspecLoc, 1, matSpe, 0);
+		gl.glProgramUniform1f(renderingProgramGeom, mshiLoc, matShi);
+System.out.println("1");
+		mMat.invert(invTrMat);
+		invTrMat.transpose(invTrMat);
+
+		gl.glUniformMatrix4fv(mLoc, 1, false, mMat.get(vals));
+		gl.glUniformMatrix4fv(vLoc, 1, false, vMat.get(vals));
+		gl.glUniformMatrix4fv(pLoc, 1, false, pMat.get(vals));
+		gl.glUniformMatrix4fv(nLoc, 1, false, invTrMat.get(vals));
+
+		gl.glBindBuffer(GL_ARRAY_BUFFER, torusVBO[0]);
+		gl.glVertexAttribPointer(0, 3, GL_FLOAT, false, 0, 0);
+		gl.glEnableVertexAttribArray(0);
+System.out.println("1");
+		gl.glBindBuffer(GL_ARRAY_BUFFER, torusVBO[2]);
+		gl.glVertexAttribPointer(1, 3, GL_FLOAT, false, 0, 0);
+		gl.glEnableVertexAttribArray(1);
+
+		gl.glEnable(GL_CULL_FACE);
+		gl.glEnable(GL_DEPTH_TEST);
+		gl.glDepthFunc(GL_LEQUAL);
+System.out.println("1");
+		gl.glUniform1i(enableLightingLoc,1);
+		gl.glFrontFace(GL_CCW);
+		gl.glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, torusVBO[3]);
+		gl.glDrawElements(GL_TRIANGLES, numTorusIndices, GL_UNSIGNED_INT, 0);
+		System.out.println("1");
+		gl.glUniform1i(enableLightingLoc,0);
+		gl.glFrontFace(GL_CW);
+		gl.glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, torusVBO[3]);
+		System.out.println("0");
+		gl.glDrawElements(GL_TRIANGLES, numTorusIndices, GL_UNSIGNED_INT, 0);
+	}
+	*/
 	
 	//Update all objects positions (Model Matrices)
 	public void updateObjects(GL4 gl){		

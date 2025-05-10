@@ -25,7 +25,7 @@ uniform mat4 p_matrix;
 uniform mat4 norm_matrix;
 uniform mat4 shadowMVP;
 
-uniform float hueAdjust;
+uniform float hueShift;
 uniform float alpha;
 uniform float flipNormal;
 
@@ -56,34 +56,26 @@ void main(void)
 	}
 
 	//Trippy Hue Effect
-	float hue;
-
-    vec4 R = vec4(1.0, 0.8, 0.6, 0.0); //Approximate conversion ratios
-	vec4 G = vec4(1.0, -0.3, -0.6, 0.0); 
-	vec4 B = vec4(1.0, -1.0, 1.6, 0.0);
-	vec4 Y = vec4(0.4, 0.5, 0.2, 0.0); 
-	vec4 I = vec4(0.5, -0.4, -0.3, 0.0); 
-	vec4 Q = vec4(0.4, -0.4, 0.2, 0.0);
-
+	float hue, chroma;
     vec4 addedColor = texture(s,tc);
+
+	vec4 R, G, B, Y, I, Q;
+
+	//Approximate conversion ratios
+    R = vec4(1.0, 0.8, 0.6, 0.0); G = vec4(1.0, -0.3, -0.6, 0.0); B = vec4(1.0, -1.0, 1.6, 0.0);
+	Y = vec4(0.4, 0.5, 0.2, 0.0); I = vec4(0.5, -0.4, -0.3, 0.0); Q = vec4(0.4, -0.4, 0.2, 0.0);
 
 	//YIQ space instead of typical HLS / HSV color system
 	//Adjust chroma levels after in YIQ space
-    float Y2 = dot(addedColor, Y);
-    float I2 = dot(addedColor, I);
-    float Q2 = dot(addedColor, Q);
+    chroma = sqrt(pow(dot(addedColor, Q), 2) + pow(dot(addedColor, I), 2));
+    hue = atan(dot(addedColor, I), dot(addedColor, Q)) + hueShift;
 
-    float chroma = sqrt(Q2*Q2 + I2*I2);
-    hue = atan(I2, Q2) + hueAdjust;
-    Q2 = chroma * sin(hue);
-    I2 = chroma * cos(hue);
+    vec4 YIQ = vec4(dot(addedColor, Y), (chroma * cos(hue)), (chroma * sin(hue)), 0.0);
+    addedColor.r = dot(YIQ, R); addedColor.g = dot(YIQ, G); addedColor.b = dot(YIQ, B);
 
-    vec4 YIQ = vec4 (Y2, I2, Q2, 0.0);
-    addedColor.r = dot(YIQ, R);
-    addedColor.g = dot(YIQ, G);
-    addedColor.b = dot(YIQ, B);
-    fragColor = (fragColor*addedColor) * 2;
+    fragColor *= addedColor*2;
 
 	//Transparency w/ new added color applied for color changing effect
+    //fragColor *= addedColor*2;
 	fragColor = vec4(fragColor.xyz, alpha);
 }
