@@ -38,16 +38,13 @@ void main(void)
 	vec3 V = normalize(-v_matrix[3].xyz - varyingVertPos);
 	vec3 H = normalize(varyingHalfVec);
 
-	vec4 fogColor = vec4(0.7, 0.8, 0.9, 1.0);	// bluish gray
+	vec4 fogColor = vec4(0.4, 0.6, 0.6, 0.5);	// bluish gray
 	float fogStart = 4;
-	float fogEnd = 5.8;
+	float fogEnd = 4.8;
 	
 	float notInShadow = textureProj(shadowTex, shadow_coord);
 	float dist = length(vertEyeSpacePos.xyz);
-	float fogFactor = clamp(((fogEnd-dist)/(fogEnd-fogStart)), 0.0, 1.0);
-
-	fragColor = mix(fogColor, (globalAmbient * material.ambient
-				+ light.ambient * material.ambient + texture(s,tc)), fogFactor);
+	float fogFactor = clamp(((fogEnd-dist)/(fogEnd-fogStart)), 0.0, 0.5);
 
 	if (notInShadow == 1.0)
 	{	fragColor += light.diffuse * material.diffuse * max(dot(L,N),0.0)
@@ -73,9 +70,9 @@ void main(void)
     vec4 YIQ = vec4(dot(addedColor, Y), (chroma * cos(hue)), (chroma * sin(hue)), 0.0);
     addedColor.r = dot(YIQ, R); addedColor.g = dot(YIQ, G); addedColor.b = dot(YIQ, B);
 
-    fragColor *= addedColor*2;
+    fragColor += addedColor;
 
 	//Transparency w/ new added color applied for color changing effect
-    //fragColor *= addedColor*2;
+    //fragColor += addedColor*2;
 	fragColor = vec4(fragColor.xyz, alpha);
 }

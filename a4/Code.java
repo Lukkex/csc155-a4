@@ -138,8 +138,8 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 
 	// material 1
 	private float[] GmatAmb = {0.3f, 0.3f, 0.3f};
-	private float[] GmatDif = {0.4f, 0.4f, 0.4f};
-	private float[] GmatSpe = {0.4f, 0.4f, 0.4f};
+	private float[] GmatDif = {0.2f, 0.4f, 0.4f};
+	private float[] GmatSpe = {0.2f, 0.1f, 0.4f};
 	private float GmatShi = Utils.goldShininess();
 	
 	// material 2
@@ -319,7 +319,7 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 		gl.glClear(GL_DEPTH_BUFFER_BIT);
 		
 		gl.glColorMask(false, true, true, false);
-		scene(30.0f);
+		scene(3.0f);
 	}
 
 	public void scene(float leftRight){
@@ -359,7 +359,7 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 		//gl.glClear(GL_DEPTH_BUFFER_BIT);
 		//geometry(gl);
 		gl.glClear(GL_DEPTH_BUFFER_BIT);
-		tessellation(gl);
+		//tessellation(gl);
 		gl.glEnable(GL_DEPTH_TEST);
 
 		//Clears color & depth buffers to default and uses prev. created renderingProgram object
@@ -452,6 +452,27 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 			transparent = false;
 			if (i == 2 || i == 3 || i == 6 || i == 7)//Transparent Glass Chamber / Stars
 				transparent = true;
+			/*else if (i == 8){
+				gl.glClear(GL_DEPTH_BUFFER_BIT);
+				mLoc = gl.glGetUniformLocation(renderingProgramGeom, "m_matrix");
+				vLoc = gl.glGetUniformLocation(renderingProgramGeom, "v_matrix");
+				pLoc = gl.glGetUniformLocation(renderingProgramGeom, "p_matrix");
+				nLoc = gl.glGetUniformLocation(renderingProgramGeom, "norm_matrix");
+				sLoc = gl.glGetUniformLocation(renderingProgramGeom, "shadowMVP");
+				alphaLoc = gl.glGetUniformLocation(renderingProgramGeom, "alpha");
+				flipLoc = gl.glGetUniformLocation(renderingProgramGeom, "flipNormal");
+			}
+			else if (i == 9){
+				gl.glClear(GL_DEPTH_BUFFER_BIT);
+				mLoc = gl.glGetUniformLocation(renderingProgram2, "m_matrix");
+				vLoc = gl.glGetUniformLocation(renderingProgram2, "v_matrix");
+				pLoc = gl.glGetUniformLocation(renderingProgram2, "p_matrix");
+				nLoc = gl.glGetUniformLocation(renderingProgram2, "norm_matrix");
+				sLoc = gl.glGetUniformLocation(renderingProgram2, "shadowMVP");
+				alphaLoc = gl.glGetUniformLocation(renderingProgram2, "alpha");
+				flipLoc = gl.glGetUniformLocation(renderingProgram2, "flipNormal");
+
+			}*/
 
 			if (i%2 == 0) material = 1;
 			else material = 0;
